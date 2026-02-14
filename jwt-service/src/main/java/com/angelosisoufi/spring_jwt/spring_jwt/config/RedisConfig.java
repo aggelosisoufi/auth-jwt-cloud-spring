@@ -1,0 +1,60 @@
+package com.angelosisoufi.spring_jwt.spring_jwt.config;
+
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
+import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisURI;
+import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.codec.ByteArrayCodec;
+import io.lettuce.core.codec.RedisCodec;
+import io.lettuce.core.codec.StringCodec;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.time.Duration;
+import java.util.function.Supplier;
+
+@Configuration
+public class RedisConfig {
+
+    private RedisClient redisClient() {
+        return RedisClient.create(RedisURI.builder()
+                .withHost("localhost")
+                .withPort(6379)
+                .withSsl(false)
+                .build());
+    }
+
+    @Bean
+    public ProxyManager<String> lettuceBasedProxyManager() {
+        RedisClient redisClient = redisClient();
+        StatefulRedisConnection<String, byte[]> redisConnection = redisClient
+                .connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
+
+        return LettuceBasedProxyManager.builderFor(redisConnection)
+                .withExpirationStrategy(
+                        ExpirationAfterWriteStrategy
+                                .basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(1L)))
+                .build();
+    }
+
+    @Bean
+    public Supplier<BucketConfiguration> signInBucketConfiguration() {
+        return () -> BucketConfiguration.builder()
+                .addLimit(limit -> limit
+                        .capacity(5)
+                        .refillIntervally(5, Duration.ofMinutes(1)))
+                .build();
+    }
+
+    @Bean
+    public Supplier<BucketConfiguration> signUpBucketConfiguration() {
+        return () -> BucketConfiguration.builder()
+                .addLimit(limit -> limit
+                        .capacity(3)
+                        .refillIntervally(3, Duration.ofMinutes(1)))
+                .build();
+    }
+}

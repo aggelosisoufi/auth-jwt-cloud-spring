@@ -128,6 +128,18 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(EmailAlreadyTakenException.class)
+    public ProblemDetail handleEmailAlreadyTaken(EmailAlreadyTakenException ex, HttpServletRequest request) {
+        log.warn("Duplicate email registration attempt at {}: {}", request.getRequestURI(), ex.getMessage());
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setType(URI.create("https://example.com/problems/email-already-taken"));
+        problem.setTitle("Email Already Taken");
+        problem.setProperty("timestamp", OffsetDateTime.now());
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problem;
+    }
+
     @ExceptionHandler({
             ExpiredJwtException.class,
             MalformedJwtException.class,

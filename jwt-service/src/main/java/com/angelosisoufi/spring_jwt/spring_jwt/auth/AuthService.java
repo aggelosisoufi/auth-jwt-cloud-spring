@@ -1,5 +1,6 @@
 package com.angelosisoufi.spring_jwt.spring_jwt.auth;
 
+import com.angelosisoufi.spring_jwt.spring_jwt.exception.EmailAlreadyTakenException;
 import com.angelosisoufi.spring_jwt.spring_jwt.security.CookieUtil;
 import com.angelosisoufi.spring_jwt.spring_jwt.security.JwtClaimFactory;
 import com.angelosisoufi.spring_jwt.spring_jwt.security.JwtService;
@@ -43,7 +44,7 @@ public class AuthService {
 
     public void register(SignUpRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email is already taken!");
+            throw new EmailAlreadyTakenException("Email is already taken!");
         }
 
         User newUser = User.builder()
