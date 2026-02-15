@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
@@ -60,7 +61,7 @@ public class RateLimitFilter implements Filter {
             return;
         }
 
-        String clientIp = httpRequest.getRemoteAddr();
+        final String clientIp = httpRequest.getRemoteAddr();
         String key;
         Supplier<BucketConfiguration> bucketConfiguration;
         if (AuthApiPaths.SIGNIN_FULL.equals(servletPath)) {
@@ -85,7 +86,7 @@ public class RateLimitFilter implements Filter {
                 HttpHeaders.RETRY_AFTER,
                 String.valueOf(TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()))
         );
-        httpResponse.setStatus(429);
+        httpResponse.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         httpResponse.getWriter().append("Too many requests");
     }
 }
