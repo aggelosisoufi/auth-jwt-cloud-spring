@@ -28,8 +28,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * 🌐 Global Exception Handler
- *
+ * Global Exception Handler
  * Converts exceptions into RFC 9457-compliant Problem Details responses.
  * Logs errors for diagnostics without exposing sensitive info.
  */
@@ -78,7 +77,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ProblemDetail handleBadCredentials(BadCredentialsException ex, HttpServletRequest request) {
+    public ProblemDetail handleBadCredentials(HttpServletRequest request) {
         log.warn("Bad credentials attempt at {}", request.getRequestURI());
 
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid email or password");
@@ -102,7 +101,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ProblemDetail handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+    public ProblemDetail handleAccessDenied(HttpServletRequest request) {
         log.warn("Access denied on {}", request.getRequestURI());
 
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Access is denied");

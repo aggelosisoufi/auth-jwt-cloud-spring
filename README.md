@@ -3,7 +3,7 @@
 This repository contains a multi-module Spring Boot project:
 
 - `config-server`: Spring Cloud Config Server (native file backend)
-- `jwt-service`: JWT auth service using HttpOnly cookies + CSRF
+- `jwt-service`: JWT auth service using HttpOnly cookies + CSRF + Redis-backed rate limiting
 
 The `jwt-service` loads its runtime configuration from `config-server`.
 
@@ -14,6 +14,14 @@ The `jwt-service` loads its runtime configuration from `config-server`.
 - Spring Cloud `2025.0.0`
 - Maven `3.9+`
 - H2 in-memory database (dev)
+- Bucket4j `8.9.0` (distributed rate limiting)
+- Redis (rate-limit token storage via Lettuce)
+
+## Prerequisites
+
+- Java 17
+- Maven 3.9+
+- Redis running on `localhost:6379` (Docker is fine)
 
 ## Project Structure
 
@@ -47,7 +55,13 @@ Important files:
 
 Start services in this exact order from the project root.
 
-Terminal 1:
+Terminal 1 (Redis):
+
+```bash
+docker run --name rate-limit -p 6379:6379 -d redis
+```
+
+Terminal 2:
 
 ```bash
 mvn -pl config-server spring-boot:run
@@ -60,7 +74,7 @@ Tomcat started on port 8012
 Started ConfigServerApplication
 ```
 
-Terminal 2:
+Terminal 3:
 
 ```bash
 mvn -pl jwt-service spring-boot:run
@@ -112,6 +126,25 @@ You should receive:
 | `POST` | `/api/auth/logout` | Logout (Spring Security logout endpoint) |
 | `GET` | `/api/user` | Protected endpoint (`ROLE_USER`) |
 
+## Rate Limiting (Auth Endpoints)
+
+`jwt-service` includes a `RateLimitFilter` backed by Redis + Bucket4j:
+
+- Applies to:
+  - `POST /api/auth/signup`
+  - `POST /api/auth/signin`
+- Key strategy:
+  - signup: `signup:<client-ip>`
+  - signin: `signin:<client-ip>`
+- On limit exceeded:
+  - status `429 Too Many Requests`
+  - header `Retry-After: <seconds>`
+  - body `Too many requests`
+
+Current bucket rules are defined in:
+
+- `jwt-service/src/main/java/com/angelosisoufi/spring_jwt/spring_jwt/config/RedisConfig.java`
+
 ## Request Flow (CSRF + Cookies)
 
 1. Call `GET /api/csrf`.
@@ -132,16 +165,22 @@ curl -i -c cookies.txt http://localhost:8013/api/csrf
 curl -i -b cookies.txt -c cookies.txt \
   -H "Content-Type: application/json" \
   -H "X-XSRF-TOKEN: <csrf-token>" \
-  -d '{"firstName":"John","lastName":"Doe","email":"john@example.com","password":"password123"}' \
+  -d '{"firstName":"John","lastName":"Doe","email":"john@example.com","password":"StrongPass1!"}' \
   http://localhost:8013/api/auth/signup
 
 # 3) Signin
 curl -i -b cookies.txt -c cookies.txt \
   -H "Content-Type: application/json" \
   -H "X-XSRF-TOKEN: <csrf-token>" \
-  -d '{"email":"john@example.com","password":"password123"}' \
+  -d '{"email":"john@example.com","password":"StrongPass1!"}' \
   http://localhost:8013/api/auth/signin
 ```
+
+## Error Responses
+
+- Duplicate signup email returns `409 Conflict` (Problem Details response).
+- Invalid CSRF token returns `403 Forbidden`.
+- Rate-limit exceeded returns `429 Too Many Requests` with `Retry-After`.
 
 ## Development Notes
 
@@ -154,6 +193,14 @@ curl -i -b cookies.txt -c cookies.txt \
 
 - `Could not resolve config data` in JWT service:
   - Ensure `config-server` is already running on `8012`.
+- Redis connection failures in JWT service:
+  - Ensure Redis is running on `localhost:6379`.
+- `403 Invalid CSRF token` on signup/signin:
+  - First call `GET /api/csrf`.
+  - Then send `X-XSRF-TOKEN` header and keep `XSRF-TOKEN` cookie.
+- Rate limiting appears inconsistent while testing:
+  - Clear Redis state before retesting:
+    - `docker exec rate-limit redis-cli FLUSHALL`
 - Port already in use:
   - `lsof -nP -iTCP:8012 -sTCP:LISTEN`
   - `lsof -nP -iTCP:8013 -sTCP:LISTEN`
